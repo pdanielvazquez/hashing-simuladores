@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hashing en acción: Tabla Hash con sondeo lineal</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 900px;
+            width: 100%;
+            backdrop-filter: blur(10px);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.2em;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+        }
+        .hash-function-demo {
+            background: #f0f4f8;
+            padding: 25px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            border-left: 6px solid #667eea;
+        }
+        .input-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        input[type="text"] {
+            flex: 2;
+            min-width: 200px;
+            padding: 15px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 50px;
+            font-size: 1.1em;
+            transition: 0.3s;
+            outline: none;
+        }
+        input[type="text"]:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 35px;
+            border-radius: 50px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.3s;
+            border: 2px solid transparent;
+        }
+        button:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        .hash-result {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 25px;
+            border: 2px solid #e0e0e0;
+        }
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            background: #f9f9f9;
+            border-radius: 12px;
+            margin: 8px 0;
+        }
+        .step-number {
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        .pill {
+            background: #e0e7ff;
+            color: #4c51bf;
+            padding: 5px 15px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+        .hash-table {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            margin: 30px 0;
+        }
+        .bucket {
+            background: white;
+            border: 3px solid #e0e0e0;
+            border-radius: 16px;
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .bucket.has-value {
+            border-color: #48bb78;
+            background: #f0fff4;
+        }
+        .bucket.colision {
+            border-color: #fbbf24;
+            animation: pulse 1.5s infinite;
+        }
+        .bucket.resuelto {
+            border-color: #9f7aea;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(251, 191, 36, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+        }
+        .bucket-index {
+            font-size: 0.9em;
+            color: #718096;
+            background: #edf2f7;
+            padding: 4px 12px;
+            border-radius: 50px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .bucket-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2d3748;
+            text-align: center;
+            word-break: break-word;
+            padding: 0 8px;
+        }
+        .empty-bucket {
+            color: #a0aec0;
+            font-style: italic;
+            font-size: 0.9em;
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 20px 0;
+            padding: 15px;
+            background: #edf2f7;
+            border-radius: 50px;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 6px;
+        }
+        .info-panel {
+            background: #f0f4f8;
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 25px;
+            border-left: 6px solid #48bb78;
+        }
+        .info-panel.colision-panel {
+            border-left-color: #fbbf24;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🗂️ Simulador de Hashing</h1>
+        <div class="subtitle">
+            Transformando strings → índices · Resolución de colisiones con sondeo lineal
+        </div>
+
+        <!-- Panel de la función hash -->
+        <div class="hash-function-demo">
+            <h3>🔢 Función hash: suma de valores ASCII módulo 5</h3>
+            <p style="color: #4a5568; margin-bottom: 20px;">
+                <code>hash(nombre) = (suma del valor numérico de cada letra) mod 5</code>
+            </p>
+            
+            <div class="input-group">
+                <input type="text" id="nombreInput" placeholder="Ej: Ana, Carlos, María..." value="Ana">
+                <button onclick="insertarNombre()">➕ Insertar nombre</button>
+            </div>
+            <div style="margin-top: 15px;">
+                <button onclick="reiniciarTabla()" style="background: #718096;">🔄 Reiniciar tabla</button>
+            </div>
+
+            <!-- Proceso paso a paso -->
+            <div id="procesoHash" class="hash-result">
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                    <span class="pill">Proceso</span>
+                    <span style="color: #666;">Ingresa un nombre para ver el cálculo</span>
+                </div>
+                <div id="pasosInsercion">
+                    <!-- Los pasos se llenan dinámicamente -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Leyenda de colores -->
+        <div class="legend">
+            <div class="legend-item"><span class="legend-color" style="background: #f0fff4; border: 3px solid #48bb78;"></span> Ocupado</div>
+            <div class="legend-item"><span class="legend-color" style="background: white; border: 3px solid #e0e0e0;"></span> Vacío</div>
+            <div class="legend-item"><span class="legend-color" style="background: white; border: 3px solid #fbbf24;"></span> Colisión (intento)</div>
+            <div class="legend-item"><span class="legend-color" style="background: white; border: 3px solid #9f7aea;"></span> Resuelto (sondeo)</div>
+        </div>
+
+        <!-- Tabla Hash Visual -->
+        <h3 style="margin-top: 30px;">📊 Tabla Hash (5 posiciones)</h3>
+        <div id="tablaHash" class="hash-table">
+            <!-- Se genera con JS -->
+        </div>
+
+        <!-- Panel de información dinámica -->
+        <div id="mensajeInfo" class="info-panel">
+            <span id="infoTexto">👋 Inserta nombres para ver cómo funciona el hashing</span>
+        </div>
+    </div>
+
+    <script>
+        // Estado de la tabla hash (simulamos 5 buckets)
+        let tabla = {
+            0: null,
+            1: null,
+            2: null,
+            3: null,
+            4: null
+        };
+
+        // Historial de inserciones (para mantener consistencia)
+        let historial = [];
+
+        // Función hash: suma códigos ASCII mod 5
+        function calcularHash(nombre) {
+            let suma = 0;
+            for (let i = 0; i < nombre.length; i++) {
+                suma += nombre.charCodeAt(i);
+            }
+            return {
+                suma: suma,
+                indice: suma % 5
+            };
+        }
+
+        // Mostrar la tabla visualmente
+        function renderizarTabla(indiceColision = null, pasoActual = null) {
+            const contenedor = document.getElementById('tablaHash');
+            contenedor.innerHTML = '';
+            
+            for (let i = 0; i < 5; i++) {
+                const bucket = document.createElement('div');
+                bucket.className = 'bucket';
+                
+                // Aplicar clases especiales para visualizar colisiones/resoluciones
+                if (tabla[i] !== null) {
+                    bucket.classList.add('has-value');
+                }
+                
+                if (indiceColision !== null && i === indiceColision && pasoActual === 'colision') {
+                    bucket.classList.add('colision');
+                } else if (indiceColision !== null && i === indiceColision && pasoActual === 'resuelto') {
+                    bucket.classList.add('resuelto');
+                }
+                
+                const indexDiv = document.createElement('div');
+                indexDiv.className = 'bucket-index';
+                indexDiv.textContent = `índice ${i}`;
+                
+                const valueDiv = document.createElement('div');
+                valueDiv.className = 'bucket-value';
+                if (tabla[i]) {
+                    valueDiv.textContent = tabla[i];
+                } else {
+                    valueDiv.innerHTML = '<span class="empty-bucket">vacío</span>';
+                }
+                
+                bucket.appendChild(indexDiv);
+                bucket.appendChild(valueDiv);
+                contenedor.appendChild(bucket);
+            }
+        }
+
+        // Actualizar panel de proceso con los pasos detallados
+        function mostrarProceso(nombre, suma, indiceIdeal, intentos, exito, indiceFinal) {
+            const contenedor = document.getElementById('pasosInsercion');
+            const infoTexto = document.getElementById('infoTexto');
+            const infoPanel = document.getElementById('mensajeInfo');
+            
+            let pasosHTML = '';
+            
+            // Paso 1: Calcular suma ASCII
+            pasosHTML += `
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <span>Calculando suma ASCII de <strong>"${nombre}"</strong>: </span>
+                    <span class="pill">${suma}</span>
+                </div>
+            `;
+            
+            // Paso 2: Obtener índice ideal
+            pasosHTML += `
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <span>Aplicando módulo 5: <strong>${suma} % 5 = ${indiceIdeal}</strong></span>
+                    <span class="pill">Índice ideal: ${indiceIdeal}</span>
+                </div>
+            `;
+            
+            // Paso 3: Verificar colisión
+            if (intentos.length > 1 || (intentos.length === 1 && intentos[0] !== indiceIdeal)) {
+                pasosHTML += `
+                    <div class="step">
+                        <span class="step-number">⚠️</span>
+                        <span style="color: #b45309;"><strong>¡Colisión!</strong> El índice ${indiceIdeal} ya está ocupado por "${tabla[indiceIdeal]}"</span>
+                    </div>
+                `;
+                
+                // Mostrar sondeo lineal
+                pasosHTML += `<div class="step"><span class="step-number">3</span><span>Buscando siguiente posición libre (sondeo lineal):</span></div>`;
+                
+                intentos.forEach((intento, idx) => {
+                    if (idx > 0) { // El primer intento ya es el ideal
+                        const estado = tabla[intento] ? 'ocupado' : 'libre';
+                        pasosHTML += `
+                            <div class="step" style="margin-left: 30px;">
+                                <span class="step-number">${3 + idx}</span>
+                                <span>Probando índice ${intento}... </span>
+                                <span style="color: ${estado === 'libre' ? '#48bb78' : '#e53e3e'};">
+                                    ${estado === 'libre' ? '✅ Libre!' : '❌ Ocupado'}
+                                </span>
+                            </div>
+                        `;
+                    }
+                });
+            } else {
+                pasosHTML += `
+                    <div class="step">
+                        <span class="step-number">3</span>
+                        <span>✅ Índice ${indiceIdeal} está libre. ¡Sin colisión!</span>
+                    </div>
+                `;
+            }
+            
+            // Resultado final
+            if (exito) {
+                pasosHTML += `
+                    <div class="step" style="background: #e6fffa;">
+                        <span class="step-number">✔️</span>
+                        <span style="color: #2c7a7b; font-weight: bold;">
+                            Insertado "${nombre}" en el índice ${indiceFinal}
+                        </span>
+                    </div>
+                `;
+                
+                infoPanel.className = 'info-panel';
+                infoTexto.textContent = `✅ "${nombre}" insertado correctamente en la posición ${indiceFinal}.`;
+            } else {
+                pasosHTML += `
+                    <div class="step" style="background: #fed7d7;">
+                        <span class="step-number">❌</span>
+                        <span style="color: #c53030; font-weight: bold;">
+                            Error: No hay espacio libre después de recorrer toda la tabla.
+                        </span>
+                    </div>
+                `;
+                
+                infoPanel.className = 'info-panel colision-panel';
+                infoTexto.textContent = `⚠️ La tabla está llena. No se pudo insertar "${nombre}".`;
+            }
+            
+            contenedor.innerHTML = pasosHTML;
+        }
+
+        // Función principal para insertar nombre
+        function insertarNombre() {
+            const input = document.getElementById('nombreInput');
+            const nombre = input.value.trim();
+            
+            if (nombre === '') {
+                alert('Por favor, ingresa un nombre válido');
+                return;
+            }
+
+            // Verificar si ya existe (opcional, pero lo hacemos para evitar duplicados en esta demo)
+            for (let i = 0; i < 5; i++) {
+                if (tabla[i] === nombre) {
+                    document.getElementById('infoTexto').textContent = `⚠️ "${nombre}" ya existe en la tabla.`;
+                    document.getElementById('mensajeInfo').className = 'info-panel colision-panel';
+                    return;
+                }
+            }
+
+            // Calcular hash
+            const { suma, indice } = calcularHash(nombre);
+            
+            // Sondeo lineal para resolver colisiones
+            let intentos = [indice];
+            let indiceActual = indice;
+            let insertado = false;
+            let indiceFinal = null;
+            
+            // Si el índice está ocupado, buscar el siguiente libre
+            if (tabla[indiceActual] !== null) {
+                // Marcar visualmente la colisión
+                renderizarTabla(indiceActual, 'colision');
+                
+                // Probar los siguientes índices (sondeo lineal)
+                for (let i = 1; i <= 5; i++) { // Probamos máximo 5 veces (tamaño de la tabla)
+                    const nuevoIndice = (indice + i) % 5;
+                    intentos.push(nuevoIndice);
+                    
+                    if (tabla[nuevoIndice] === null) {
+                        indiceActual = nuevoIndice;
+                        insertado = true;
+                        indiceFinal = nuevoIndice;
+                        break;
+                    }
+                }
+                
+                if (!insertado) {
+                    // Si después de 5 intentos no hay espacio, tabla llena
+                    indiceFinal = null;
+                }
+            } else {
+                // No hay colisión
+                insertado = true;
+                indiceFinal = indiceActual;
+            }
+            
+            // Mostrar proceso paso a paso (aún sin modificar la tabla)
+            mostrarProceso(nombre, suma, indice, intentos, insertado, indiceFinal);
+            
+            // Si hay espacio, insertar
+            if (insertado && indiceFinal !== null) {
+                tabla[indiceFinal] = nombre;
+                historial.push(nombre);
+                
+                // Determinar si hubo colisión resuelta para animación
+                if (intentos.length > 1) {
+                    renderizarTabla(indiceFinal, 'resuelto');
+                } else {
+                    renderizarTabla();
+                }
+                
+                // Actualizar panel de información
+                if (intentos.length > 1) {
+                    document.getElementById('infoTexto').textContent = 
+                        `✨ Colisión resuelta: "${nombre}" se insertó en índice ${indiceFinal} (ideal era ${indice})`;
+                    document.getElementById('mensajeInfo').className = 'info-panel colision-panel';
+                }
+            } else if (!insertado) {
+                renderizarTabla();
+            }
+            
+            // Limpiar input
+            input.value = '';
+        }
+
+        // Reiniciar la tabla
+        function reiniciarTabla() {
+            tabla = { 0: null, 1: null, 2: null, 3: null, 4: null };
+            historial = [];
+            renderizarTabla();
+            document.getElementById('pasosInsercion').innerHTML = `
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                    <span class="pill">Proceso</span>
+                    <span style="color: #666;">Ingresa un nombre para ver el cálculo</span>
+                </div>
+            `;
+            document.getElementById('infoTexto').textContent = '🔄 Tabla reiniciada. ¡Empieza de nuevo!';
+            document.getElementById('mensajeInfo').className = 'info-panel';
+        }
+
+        // Inicializar la vista
+        window.onload = function() {
+            renderizarTabla();
+        };
+    </script>
+</body>
+</html>

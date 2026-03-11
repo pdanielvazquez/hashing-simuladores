@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Demostrador de Hashing: Sondeo Lineal vs Encadenamiento</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --bg:#0f172a;         /* fondo */
+      --panel:#111827;      /* paneles */
+      --text:#e5e7eb;       /* texto */
+      --muted:#9ca3af;      /* texto secundario */
+      --accent:#22c55e;     /* éxito */
+      --warn:#f59e0b;       /* advertencia */
+      --error:#ef4444;      /* error */
+      --primary:#38bdf8;    /* primario */
+      --highlight:#a78bfa;  /* resalte */
+      --probe:#f472b6;      /* sonda */
+      --slot:#1f2937;       /* casilla */
+      --bucket:#111827;     /* fondo cubeta */
+      --node:#0b6;          /* nodo encadenado */
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background:linear-gradient(180deg,#0b1022, #0f172a 30%);
+      color:var(--text); line-height:1.35;
+    }
+    header{
+      padding:24px 20px;
+      background:#0b1022; border-bottom:1px solid #1f2937;
+    }
+    h1{margin:0 0 6px 0; font-size:1.35rem;}
+    .sub{color:var(--muted); font-size:.95rem}
+    main{padding:20px; display:grid; gap:16px; grid-template-columns: 320px 1fr;}
+    @media (max-width: 980px){ main{grid-template-columns:1fr;} }
+    .card{
+      background:rgba(17,24,39,.7);
+      border:1px solid #1f2937; border-radius:12px; padding:14px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.25);
+    }
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    .col{display:flex; flex-direction:column; gap:8px}
+    label{font-size:.9rem; color:var(--muted)}
+    input[type="number"], input[type="text"], select, button{
+      background:#0b1022; color:var(--text); border:1px solid #1f2937; border-radius:10px;
+      padding:8px 10px; outline:none;
+    }
+    input[type="number"]:focus, input[type="text"]:focus, select:focus{border-color:var(--primary)}
+    button{cursor:pointer}
+    button.primary{background:linear-gradient(90deg,#0891b2,#38bdf8); border:none}
+    button.warn{background:#f59e0b22; border-color:#f59e0b}
+    button.ghost{background:transparent}
+    .hint{font-size:.85rem; color:var(--muted)}
+    .stats{display:flex; gap:14px; flex-wrap:wrap; font-size:.9rem}
+    .stats > div{background:#0b1022; border:1px solid #1f2937; padding:8px 10px; border-radius:10px}
+    .grid{
+      display:grid; gap:8px;
+      grid-template-columns: repeat(auto-fill, minmax(120px,1fr));
+    }
+    .slot, .bucket{
+      background:var(--slot); border:1px solid #263041; border-radius:10px; padding:10px; position:relative; min-height:66px;
+    }
+    .idx{
+      position:absolute; top:6px; left:8px; font-size:.75rem; color:var(--muted);
+      background:#0b1022; padding:2px 6px; border-radius:8px; border:1px solid #1f2937;
+    }
+    .value{
+      font-weight:600; font-size:1rem; word-break:break-all;
+    }
+    .empty{color:#334155; font-style:italic}
+    .occupied{color:#e2e8f0}
+    .tomb{color:#f43f5e}
+    .highlight{outline:2px solid var(--highlight); box-shadow:0 0 0 3px rgba(167,139,250,.25) inset}
+    .probe{outline:2px dashed var(--probe)}
+    .bucket-list{display:flex; gap:6px; margin-top:6px; flex-wrap:wrap}
+    .node{
+      background:#083344; border:1px solid #0d9488; color:#a7f3d0;
+      padding:4px 8px; border-radius:999px; font-size:.9rem;
+    }
+    .narrador{
+      background:#0b1022; border:1px dashed #334155; border-radius:12px; padding:10px; min-height:56px; color:#e5e7eb
+    }
+    .ok{color:var(--accent)} .warnText{color:var(--warn)} .err{color:var(--error)}
+    footer{padding:18px 20px; color:var(--muted); font-size:.85rem}
+    code {background:#0b1022; border:1px solid #1f2937; padding:1px 4px; border-radius:6px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Demostrador de Hashing — Sondeo lineal vs Encadenamiento</h1>
+    <div class="sub">Pensado para estudiantes universitarios que ya manejan arreglos, listas enlazadas y análisis de complejidad.</div>
+  </header>
+
+  <main>
+    <!-- Panel de control -->
+    <section class="card" aria-label="Controles">
+      <div class="col">
+        <div>
+          <label for="estrategia"><strong>Estrategia de colisiones</strong></label>
+          <div class="row">
+            <label><input type="radio" name="estrategia" value="open" checked> Direccionamiento abierto (sondeo lineal)</label>
+          </div>
+          <div class="row">
+            <label><input type="radio" name="estrategia" value="chain"> Encadenamiento (listas por cubeta)</label>
+          </div>
+          <div class="hint">Cambiar la estrategia <em>reinicia</em> la tabla para mantener consistencia.</div>
+        </div>
+
+        <div class="row">
+          <div class="col" style="flex:1">
+            <label for="mSize">Tamaño de la tabla (m)</label>
+            <input id="mSize" type="number" min="3" max="101" step="1" value="7" />
+            <div class="hint">Sugerencia: usa números primos para reducir clusters en sondeo lineal.</div>
+          </div>
+          <div class="col" style="flex:1">
+            <label for="clave">Clave (número o texto)</label>
+            <input id="clave" type="text" placeholder="Ej: 15 o 'ANA'" />
+          </div>
+        </div>
+
+        <div class="row">
+          <button class="primary" id="btnInsert">Insertar (rápido)</button>
+          <button id="btnInsertStep">Insertar (paso a paso)</button>
+          <button id="btnSearch">Buscar</button>
+          <button class="warn" id="btnDelete">Eliminar</button>
+        </div>
+
+        <div class="row">
+          <button class="ghost" id="btnEjemplo">Cargar ejemplo</button>
+          <button class="ghost" id="btnReset">Reiniciar</button>
+        </div>
+
+        <div class="col">
+          <label><strong>Hash usado</strong></label>
+          <div class="hint">
+            Para números: <code>h(k) = k mod m</code><br/>
+            Para texto: <code>h(k) = (Σ códigos Unicode de caracteres) mod m</code>
+          </div>
+        </div>
+
+        <div class="col">
+          <label><strong>Complejidad (resumen)</strong></label>
+          <div class="hint">
+            Promedio: ≈ O(1) con buena dispersión y carga moderada.<br/>
+            Peor caso: O(n) (clustering en abierto; listas largas en encadenamiento).
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Visualización y métricas -->
+    <section class="card" aria-label="Visualización y métricas">
+      <div class="stats">
+        <div>m = <span id="statM">7</span></div>
+        <div>n = <span id="statN">0</span></div>
+        <div>α = <span id="statAlpha">0.00</span></div>
+        <div>Colisiones (acumulado) = <span id="statColl">0</span></div>
+      </div>
+
+      <div class="stats" id="statsCostos">
+        <div><strong>Costos esperados (aprox.):</strong></div>
+        <div id="costOpen" style="display:none">
+          <div>Abierto — Exitoso: <span id="openSucc"></span> &nbsp;|&nbsp; No exitoso: <span id="openFail"></span></div>
+          <div class="hint">Fórmulas de sondeo lineal: ½·(1 + 1/(1−α)) y ½·(1 + 1/(1−α)²)</div>
+        </div>
+        <div id="costChain" style="display:none">
+          <div>Encadenamiento — Exitoso: <span id="chainSucc"></span> &nbsp;|&nbsp; No exitoso: <span id="chainFail"></span></div>
+          <div class="hint">Aprox.: exitoso 1 + α/2, no exitoso ≈ α</div>
+        </div>
+      </div>
+
+      <h3>Tabla hash</h3>
+      <div id="canvas" class="grid" aria-live="polite"></div>
+
+      <h3>Explicación paso a paso</h3>
+      <div id="narrador" class="narrador">Aquí aparecerán los pasos del algoritmo.</div>
+    </section>
+  </main>
+
+  <footer>
+    Consejo didáctico: observa cómo la <strong>carga α = n/m</strong> afecta la cantidad de sondas (abierto) frente a la longitud de las listas (encadenamiento). Prueba con claves que colisionen y con diferentes tamaños de tabla.
+  </footer>
+
+  <script>
+    // ==========================
+    // Utilidades y estado global
+    // ==========================
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => document.querySelectorAll(sel);
+
+    const estado = {
+      estrategia: 'open', // 'open' o 'chain'
+      m: 7,
+      n: 0,
+      colisiones: 0,
+      tabla: [], // open: [{key, deleted}] | null ; chain: Array<Array>
+      animTimer: null,
+      lock: false
+    };
+
+    // Hash: num o texto
+    function hash(k, m){
+      if (typeof k === 'number' && !Number.isNaN(k)) return ((k % m) + m) % m;
+      const s = String(k);
+      let acc = 0;
+      for (let i=0; i<s.length; i++) acc += s.codePointAt(i);
+      return acc % m;
+    }
+
+    // Parse de clave: si es número puro -> number, else -> string
+    function parseClave(raw) {
+      if (raw == null) return null;
+      const t = raw.trim();
+      if (t === '') return null;
+      if (/^[+-]?\d+$/.test(t)) return Number(t);
+      return t;
+    }
+
+    // Inicializa tabla según estrategia
+    function initTabla(){
+      estado.n = 0;
+      estado.colisiones = 0;
+      if (estado.estrategia === 'open'){
+        estado.tabla = Array(estado.m).fill(null); // null | {key, deleted:boolean}
+      } else {
+        estado.tabla = Array.from({length: estado.m}, () => []); // encadenamiento
+      }
+      stopAnim();
+      pintar();
+      narrar("Tabla inicializada.");
+    }
+
+    function setEstrategia(val){
+      if (estado.lock) return;
+      const cambio = estado.estrategia !== val;
+      estado.estrategia = val;
+      // Mostrar/ocultar fórmulas:
+      if (val === 'open'){
+        $("#costOpen").style.display = '';
+        $("#costChain").style.display = 'none';
+      } else {
+        $("#costOpen").style.display = 'none';
+        $("#costChain").style.display = '';
+      }
+      if (cambio){
+        initTabla();
+      } else {
+        actualizarStats();
+      }
+    }
+
+    function setM(nuevoM){
+      const m = Number(nuevoM);
+      if (!Number.isInteger(m) || m < 3) return;
+      estado.m = m;
+      $("#statM").textContent = m;
+      initTabla();
+    }
+
+    function alpha(){
+      // En encadenamiento, n = total de claves
+      // En abierto, n = slots ocupados (excluye tumbas)
+      return estado.m > 0 ? (estado.n / estado.m) : 0;
+    }
+
+    function actualizarStats(){
+      $("#statM").textContent = estado.m;
+      $("#statN").textContent = estado.n;
+      $("#statAlpha").textContent = alpha().toFixed(2);
+      $("#statColl").textContent = estado.colisiones;
+
+      // Costos esperados aproximados:
+      const a = Math.min(0.95, Math.max(0, alpha())); // limitamos para evitar div/0
+      if (estado.estrategia === 'open'){
+        const succ = 0.5 * (1 + 1/(1 - a));
+        const fail = 0.5 * (1 + 1/((1 - a)*(1 - a)));
+        $("#openSucc").textContent = succ.toFixed(2) + " sondas";
+        $("#openFail").textContent = fail.toFixed(2) + " sondas";
+      } else {
+        const succ = 1 + a/2;
+        const fail = a;
+        $("#chainSucc").textContent = succ.toFixed(2) + " nodos";
+        $("#chainFail").textContent = fail.toFixed(2) + " nodos";
+      }
+    }
+
+    // ==========================
+    // Render de la tabla
+    // ==========================
+    function pintar(){
+      const cont = $("#canvas");
+      cont.innerHTML = '';
+      if (estado.estrategia === 'open'){
+        // Grid de casillas
+        for (let i=0;i<estado.m;i++){
+          const cell = document.createElement('div');
+          cell.className = 'slot';
+          cell.dataset.idx = i;
+          const idx = document.createElement('div');
+          idx.className = 'idx';
+          idx.textContent = i;
+          cell.appendChild(idx);
+          const v = estado.tabla[i];
+          const val = document.createElement('div');
+          val.className = 'value';
+          if (v === null){
+            val.innerHTML = '<span class="empty">vacío</span>';
+          } else if (v.deleted){
+            val.innerHTML = '<span class="tomb">⊘ tumba</span>';
+          } else {
+            val.innerHTML = `<span class="occupied">${escapeHTML(String(v.key))}</span>`;
+          }
+          cell.appendChild(val);
+          cont.appendChild(cell);
+        }
+      } else {
+        // Lista de cubetas
+        for (let i=0;i<estado.m;i++){
+          const bucket = document.createElement('div');
+          bucket.className = 'bucket';
+          bucket.dataset.idx = i;
+
+          const idx = document.createElement('div');
+          idx.className = 'idx';
+          idx.textContent = i;
+          bucket.appendChild(idx);
+
+          const wrap = document.createElement('div');
+          wrap.className = 'bucket-list';
+          const lista = estado.tabla[i];
+          if (!lista || lista.length === 0){
+            const emp = document.createElement('div');
+            emp.className = 'empty';
+            emp.textContent = 'vacío';
+            wrap.appendChild(emp);
+          } else {
+            lista.forEach(k => {
+              const node = document.createElement('div');
+              node.className = 'node';
+              node.textContent = k;
+              wrap.appendChild(node);
+            });
+          }
+          bucket.appendChild(wrap);
+          cont.appendChild(bucket);
+        }
+      }
+      actualizarStats();
+    }
+
+    function escapeHTML(s){
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+    }
+
+    // ==========================
+    // Narrador y animación
+    // ==========================
+    function narrar(msg){
+      $("#narrador").innerHTML = msg;
+    }
+
+    function highlight(indices, cls='highlight'){
+      // indices: array de enteros (slots) a resaltar
+      $$(".slot, .bucket").forEach(el => el.classList.remove('highlight','probe'));
+      indices.forEach(obj => {
+        const i = typeof obj === 'number' ? obj : obj.i;
+        const c = typeof obj === 'number' ? cls : obj.cls || cls;
+        const el = document.querySelector(`[data-idx="${i}"]`);
+        if (el) el.classList.add(c);
+      });
+    }
+
+    function stopAnim(){
+      if (estado.animTimer){ clearInterval(estado.animTimer); estado.animTimer = null; }
+      estado.lock = false;
+    }
+
+    // ==========================
+    // Operaciones: insertar/buscar/eliminar
+    // ==========================
+    function existeClaveOpen(k){
+      const m = estado.m;
+      let start = hash(k,m);
+      for (let t=0; t<m; t++){
+        const i = (start + t) % m;
+        const slot = estado.tabla[i];
+        if (slot === null) return false; // corta al encontrar vacío
+        if (slot && !slot.deleted && isEqual(slot.key, k)) return true;
+        // si es tumba o distinto, sigue
+      }
+      return false;
+    }
+
+    function isEqual(a,b){ return String(a) === String(b); }
+
+    function insertarRapido(k){
+      if (estado.estrategia === 'open'){
+        // Duplicados no permitidos
+        if (existeClaveOpen(k)) { narrar(`<span class="warnText">La clave ya existe en la tabla.</span>`); return; }
+        const m = estado.m;
+        let start = hash(k,m);
+        let firstTomb = -1;
+        for (let t=0; t<m; t++){
+          const i = (start + t) % m;
+          const slot = estado.tabla[i];
+          if (slot === null){ // libre definitivo
+            const pos = (firstTomb !== -1) ? firstTomb : i;
+            estado.tabla[pos] = {key:k, deleted:false};
+            estado.n++;
+            if (t > 0) estado.colisiones += t; // t cuenta sondas por colisiones
+            pintar();
+            narrar(`<span class="ok">Insertado en índice ${pos}.</span> Sondas: ${t}${firstTomb!==-1?' (reutilizó tumba)':''}`);
+            return;
+          } else if (slot.deleted && firstTomb === -1){
+            firstTomb = i;
+          } else if (!slot.deleted && isEqual(slot.key,k)){
+            narrar(`<span class="warnText">La clave ya existe en la tabla.</span>`);
+            return;
+          }
+        }
+        narrar(`<span class="err">Tabla llena: no se pudo insertar.</span>`);
+      } else {
+        // Encadenamiento
+        const i = hash(k, estado.m);
+        const bucket = estado.tabla[i];
+        if (bucket.some(x => isEqual(x,k))){
+          narrar(`<span class="warnText">La clave ya existe en la cubeta ${i}.</span>`);
+          return;
+        }
+        const antes = bucket.length;
+        bucket.push(k);
+        estado.n++;
+        if (antes > 0) estado.colisiones += 1; // contamos una colisión cuando apilamos sobre un bucket ya no vacío
+        pintar();
+        narrar(`<span class="ok">Insertado en cubeta ${i}.</span> Longitud de lista: ${bucket.length}`);
+      }
+    }
+
+    function insertarPasoAPaso(k){
+      if (estado.lock) return;
+      estado.lock = true;
+      if (estado.estrategia === 'open'){
+        if (existeClaveOpen(k)) { narrar(`<span class="warnText">La clave ya existe en la tabla.</span>`); estado.lock=false; return; }
+        const m = estado.m;
+        const start = hash(k,m);
+        let t = 0, firstTomb = -1;
+        narrar(`h(${escapeHTML(String(k))}) = ${start}. Intento en índice ${start}.`);
+        highlight([start]);
+
+        estado.animTimer = setInterval(()=>{
+          const i = (start + t) % m;
+          const slot = estado.tabla[i];
+          if (slot === null){
+            const pos = (firstTomb !== -1) ? firstTomb : i;
+            estado.tabla[pos] = {key:k, deleted:false};
+            estado.n++;
+            if (t > 0) estado.colisiones += t;
+            pintar();
+            highlight([pos]);
+            narrar(`<span class="ok">Insertado en índice ${pos}.</span> Total de sondas: ${t}${firstTomb!==-1?' (reutilizó tumba)':''}`);
+            stopAnim();
+          } else if (slot.deleted){
+            narrar(`Índice ${i}: <em>tumba</em>. Se puede reutilizar si no hay hueco antes.`);
+            highlight([{i, cls:'probe'}]);
+            if (firstTomb === -1) firstTomb = i;
+            t++;
+            if (t >= m){ narrar(`<span class="err">Tabla llena.</span>`); stopAnim(); }
+          } else if (!slot.deleted){
+            narrar(`Colisión en ${i} (ocupa "${escapeHTML(String(slot.key))}"). Sonda lineal a ${(i+1)%m}.`);
+            highlight([{i, cls:'probe'}, {i: (i+1)%m, cls:'highlight'}]);
+            t++;
+            if (t >= m){ narrar(`<span class="err">Tabla llena.</span>`); stopAnim(); }
+          }
+        }, 800);
+
+      } else {
+        const i = hash(k, estado.m);
+        const bucket = estado.tabla[i];
+        let paso = 0;
+        narrar(`h(${escapeHTML(String(k))}) = ${i}. Ir a cubeta ${i}.`);
+        highlight([i]);
+
+        estado.animTimer = setInterval(()=>{
+          if (paso === 0){
+            if (bucket.some(x => isEqual(x,k))){
+              narrar(`<span class="warnText">La clave ya existe en la cubeta ${i}.</span>`);
+              stopAnim(); return;
+            }
+            if (bucket.length === 0){
+              narrar(`Cubeta ${i} está vacía. Insertar directamente.`);
+            } else {
+              narrar(`Cubeta ${i} ya tiene ${bucket.length} elemento(s) ⇒ ocurre colisión, se encadena al final.`);
+            }
+            paso++;
+          } else {
+            bucket.push(k);
+            estado.n++;
+            if (bucket.length > 1) estado.colisiones += 1;
+            pintar();
+            highlight([i]);
+            narrar(`<span class="ok">Insertado en cubeta ${i}.</span> Longitud de la lista ahora: ${bucket.length}.`);
+            stopAnim();
+          }
+        }, 900);
+      }
+    }
+
+    function buscar(k){
+      if (estado.estrategia === 'open'){
+        const m = estado.m;
+        const start = hash(k,m);
+        let probes = 0;
+        for (let t=0; t<m; t++){
+          const i = (start + t) % m;
+          const slot = estado.tabla[i];
+          probes++;
+          if (slot === null){
+            pintar(); highlight([i,'probe']); 
+            narrar(`<span class="err">No encontrado.</span> Se detiene en ${i} (vacío). Sondas: ${probes}.`);
+            return;
+          }
+          if (slot && !slot.deleted && isEqual(slot.key,k)){
+            pintar(); highlight([i]);
+            narrar(`<span class="ok">Encontrado en índice ${i}.</span> Sondas: ${probes}.`);
+            return;
+          }
+          // tumba o distinto ⇒ seguir
+        }
+        narrar(`<span class="err">No encontrado tras inspeccionar toda la tabla.</span>`);
+      } else {
+        const i = hash(k, estado.m);
+        const bucket = estado.tabla[i];
+        const pos = bucket.findIndex(x => isEqual(x,k));
+        pintar(); highlight([i]);
+        if (pos === -1){
+          narrar(`<span class="err">No encontrado.</span> Revisada cubeta ${i}. Longitud revisada: ${bucket.length}.`);
+        } else {
+          narrar(`<span class="ok">Encontrado en cubeta ${i}, posición ${pos} de la lista.</span>`);
+        }
+      }
+    }
+
+    function eliminar(k){
+      if (estado.estrategia === 'open'){
+        const m = estado.m;
+        const start = hash(k,m);
+        for (let t=0; t<m; t++){
+          const i = (start + t) % m;
+          const slot = estado.tabla[i];
+          if (slot === null){
+            narrar(`<span class="err">No se puede eliminar: no existe.</span> Se encontró vacío en ${i}.`);
+            pintar(); highlight([i]); return;
+          }
+          if (slot && !slot.deleted && isEqual(slot.key,k)){
+            estado.tabla[i].deleted = true; // marcar tumba
+            estado.n--; // disminuye elementos activos
+            pintar(); highlight([i]);
+            narrar(`<span class="ok">Eliminado en índice ${i}.</span> Marcado como tumba (⊘) para no romper sondas futuras.`);
+            return;
+          }
+        }
+        narrar(`<span class="err">No se encontró la clave.</span>`);
+      } else {
+        const i = hash(k, estado.m);
+        const bucket = estado.tabla[i];
+        const pos = bucket.findIndex(x => isEqual(x,k));
+        if (pos === -1){
+          narrar(`<span class="err">No se puede eliminar: no existe en cubeta ${i}.</span>`);
+          pintar(); highlight([i]); return;
+        }
+        bucket.splice(pos,1);
+        estado.n--;
+        pintar(); highlight([i]);
+        narrar(`<span class="ok">Eliminado de la cubeta ${i}.</span> Longitud restante: ${bucket.length}.`);
+      }
+    }
+
+    // ==========================
+    // Eventos UI
+    // ==========================
+    function bind(){
+      // Estrategia
+      $$('input[name="estrategia"]').forEach(r => {
+        r.addEventListener('change', e => setEstrategia(e.target.value));
+      });
+
+      // m
+      $("#mSize").addEventListener('change', e => setM(e.target.value));
+
+      // Botones
+      $("#btnInsert").addEventListener('click', () => {
+        const k = parseClave($("#clave").value);
+        if (k == null){ narrar(`<span class="warnText">Ingresa una clave válida.</span>`); return; }
+        insertarRapido(k);
+      });
+      $("#btnInsertStep").addEventListener('click', () => {
+        const k = parseClave($("#clave").value);
+        if (k == null){ narrar(`<span class="warnText">Ingresa una clave válida.</span>`); return; }
+        insertarPasoAPaso(k);
+      });
+      $("#btnSearch").addEventListener('click', () => {
+        const k = parseClave($("#clave").value);
+        if (k == null){ narrar(`<span class="warnText">Ingresa una clave válida.</span>`); return; }
+        buscar(k);
+      });
+      $("#btnDelete").addEventListener('click', () => {
+        const k = parseClave($("#clave").value);
+        if (k == null){ narrar(`<span class="warnText">Ingresa una clave válida.</span>`); return; }
+        eliminar(k);
+      });
+      $("#btnReset").addEventListener('click', () => initTabla());
+      $("#btnEjemplo").addEventListener('click', cargarEjemplo);
+
+      // Enter para insertar rápido
+      $("#clave").addEventListener('keydown', (e) => {
+        if (e.key === 'Enter'){ $("#btnInsert").click(); }
+      });
+    }
+
+    function cargarEjemplo(){
+      initTabla();
+      // Elegimos un conjunto que causa colisiones en m=7
+      const datos = [15, 11, 27, 8, 12, 7, 14, 21];
+      // Si el usuario cambió m, nos adaptamos:
+      for (const x of datos) insertarRapido(x);
+      narrar(`Ejemplo cargado: ${datos.join(', ')}. Observa colisiones y compara estrategias.`);
+    }
+
+    // ==========================
+    // Inicio
+    // ==========================
+    (function start(){
+      bind();
+      setEstrategia('open');
+      setM(Number($("#mSize").value) || 7);
+      pintar();
+      narrar('¡Listo! Selecciona estrategia, ingresa una clave y elige la operación. Prueba "Insertar (paso a paso)".');
+    })();
+  </script>
+</body>
+</html>
