@@ -69,7 +69,7 @@ public:
                 new_table.insert(key);
             }
         }
-        table = new_table.table;
+        table = move(new_table.table);
         std::cout << "Rehashing completo. Nueva capacidad: " << size << std::endl;
     }
 
